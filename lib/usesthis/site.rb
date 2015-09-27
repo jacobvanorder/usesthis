@@ -36,5 +36,38 @@ module UsesThis
 
       super
     end
+
+    def generate_files
+      super
+      generate_stats
+    end
+
+    def generate_stats
+      client = Redis.new
+      @stats = {hardware: {all: {}}, software: {all: {}}}
+
+      %w[hardware software].each do |type|
+        type_key = "#{type}:all"
+        year_keys = {}
+
+        @posts.each do |post|
+          year_key = "#{type}:#{post.year}"
+
+          post.send(type).each_value do |item|
+            [type_key, year_key].each do |key|
+              client.zincrby(key, 1, item.slug)
+            end
+          end
+
+          year_keys[post.year] ||= year_key
+        end
+
+        @stats[type.to_sym][:all] = client.zrevrange(type_key, 0, 9)
+
+        year_keys.each do |year, year_key|
+          @stats[type.to_sym][year.to_sym] = client.zrevrange(year_key, 0, 9)
+        end
+      end
+    end
   end
 end
